@@ -2,3 +2,4 @@ Appointments.csv
 scraper_config.json
 users.txt
 venv/
+.env

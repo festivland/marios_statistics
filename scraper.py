@@ -12,6 +12,7 @@ import sys
 from datetime import datetime
 from typing import Optional, Dict, Any
 import json
+from dotenv import load_dotenv
 
 
 class BooklyAppointmentsScraper:
@@ -305,57 +306,37 @@ class BooklyAppointmentsScraper:
 
 
 def load_config() -> Dict[str, Any]:
-    """Load configuration from config file or environment variables."""
-    config_file = 'scraper_config.json'
+    """Load configuration from environment variables (.env file or system environment)."""
+    # Load environment variables from .env file if it exists
+    load_dotenv()
     
-    # First, try to load from config file
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-            print(f"📄 Loaded config from {config_file}")
-            
-            # Validate required fields
-            required_fields = ['base_url', 'username', 'password']
-            missing_fields = [field for field in required_fields if field not in config or not config[field]]
-            
-            if missing_fields:
-                print(f"❌ Missing required fields in {config_file}: {missing_fields}")
-                print("Please ensure your config file contains: base_url, username, password")
-                sys.exit(1)
-                
-            return config
-            
-        except Exception as e:
-            print(f"❌ Could not load config file {config_file}: {e}")
-            print("Please check that the file exists and contains valid JSON")
-            sys.exit(1)
-    
-    # Fallback to environment variables if config file doesn't exist
-    print(f"⚠️  Config file {config_file} not found, trying environment variables...")
+    # Load from environment variables only
     config = {
         'base_url': os.getenv('WP_BASE_URL'),
         'username': os.getenv('WP_USERNAME'),
         'password': os.getenv('WP_PASSWORD'),
     }
     
-    # Validate environment variables
-    missing_env_vars = [var for var in ['WP_BASE_URL', 'WP_USERNAME', 'WP_PASSWORD'] 
-                       if not os.getenv(var)]
+    # Check if all required env vars are available
+    if all(config.values()):
+        print("📄 Loaded config from environment variables")
+        return config
     
-    if missing_env_vars:
-        print(f"❌ Missing environment variables: {missing_env_vars}")
-        print(f"Please create {config_file} with your credentials or set environment variables")
-        print(f"\nExample {config_file}:")
-        print('''{
-    "base_url": "https://your-site.com",
-    "username": "your-username",
-    "password": "your-password"
-}''')
-        sys.exit(1)
-    
-    print("📄 Loaded config from environment variables")
-    return config
+    # Missing configuration
+    missing_vars = [key for key, value in config.items() if not value]
+    print("❌ Missing required environment variables!")
+    print(f"Missing: {', '.join(f'WP_{var.upper()}' for var in missing_vars)}")
+    print("\nPlease set up your environment variables:")
+    print("\n1. Create a .env file (recommended):")
+    print("   Copy env.example to .env and fill in your credentials:")
+    print("   WP_BASE_URL=https://your-wordpress-site.com")
+    print("   WP_USERNAME=your_username")
+    print("   WP_PASSWORD=your_password")
+    print("\n2. Or set system environment variables:")
+    print("   export WP_BASE_URL=https://your-wordpress-site.com")
+    print("   export WP_USERNAME=your_username") 
+    print("   export WP_PASSWORD=your_password")
+    sys.exit(1)
 
 
 def main():

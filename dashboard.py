@@ -13,6 +13,7 @@ import os
 import subprocess
 import shutil
 from typing import Optional, Dict, List, Tuple
+from dotenv import load_dotenv
 
 
 class AppointmentsDashboard:
@@ -64,19 +65,62 @@ class AppointmentsDashboard:
         """, unsafe_allow_html=True)
     
     def load_users(self) -> Dict[str, str]:
-        """Load users from the local text file."""
+        """Load users from Streamlit secrets, .env file, or system env vars."""
         users = {}
         try:
-            if os.path.exists('users.txt'):
-                with open('users.txt', 'r') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith('#'):
-                            if ':' in line:
-                                username, password = line.split(':', 1)
-                                users[username.strip()] = password.strip()
+            # Priority 1: Try Streamlit secrets (for Streamlit Cloud)
+            try:
+                username = st.secrets["DASHBOARD_USERNAME"]
+                password = st.secrets["DASHBOARD_PASSWORD"]
+                if username and password:
+                    users[username] = password
+                    return users
+            except (KeyError, FileNotFoundError):
+                # Streamlit secrets not available, continue to environment variables
+                pass
+            
+            # Priority 2: Load environment variables from .env file if it exists (for local development)
+            load_dotenv()
+            
+            # Get credentials from environment variables
+            username = os.getenv('DASHBOARD_USERNAME')
+            password = os.getenv('DASHBOARD_PASSWORD')
+            
+            if username and password:
+                users[username] = password
+                return users
+            else:
+                # Show detailed error message about missing configuration
+                missing_vars = []
+                if not username:
+                    missing_vars.append('DASHBOARD_USERNAME')
+                if not password:
+                    missing_vars.append('DASHBOARD_PASSWORD')
+                
+                st.error(f"❌ Missing required credentials: {', '.join(missing_vars)}")
+                st.error("Please set up your dashboard credentials using one of these methods:")
+                st.info("""
+                **For Streamlit Cloud:**
+                Add these secrets in your Streamlit Cloud app settings:
+                ```toml
+                DASHBOARD_USERNAME = "your_username"
+                DASHBOARD_PASSWORD = "your_password"
+                ```
+                
+                **For local development:**
+                1. Create a .env file with:
+                   ```
+                   DASHBOARD_USERNAME=your_username
+                   DASHBOARD_PASSWORD=your_password
+                   ```
+                2. Or set system environment variables:
+                   ```
+                   export DASHBOARD_USERNAME=your_username
+                   export DASHBOARD_PASSWORD=your_password
+                   ```
+                """)
         except Exception as e:
-            st.error(f"Error loading users: {e}")
+            st.error(f"Error loading user credentials: {e}")
         return users
     
     def authenticate_user(self, username: str, password: str) -> bool:
@@ -111,14 +155,20 @@ class AppointmentsDashboard:
                     else:
                         st.warning("⚠️ Please enter both username and password!")
             
-            # Show demo credentials
-            with st.expander("🔍 Demo Credentials"):
+            # Show setup information
+            with st.expander("ℹ️ Setup Information"):
                 st.markdown("""
-                **Available Demo Accounts:**
-                - **admin** : festival2025
-                - **manager** : bachata123
-                - **analyst** : data456
-                - **guest** : view2025
+                **Configuration Required:**
+                
+                Create a `.env` file with your credentials:
+                ```
+                DASHBOARD_USERNAME=your_username
+                DASHBOARD_PASSWORD=your_password
+                ```
+                
+                You can copy `env.example` to `.env` and fill in your credentials.
+                
+                Contact your administrator if you don't have access credentials.
                 """)
     
     def show_logout_option(self):
