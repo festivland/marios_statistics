@@ -528,7 +528,22 @@ class AppointmentsDashboard:
         except subprocess.CalledProcessError as e:
             st.error(f"❌ Scraper failed with error code {e.returncode}")
             if e.stderr:
-                st.error(f"Error details: {e.stderr}")
+                st.error(f"**Error details:** {e.stderr}")
+            if e.stdout:
+                st.error(f"**Output:** {e.stdout}")
+            
+            # Show expanded error information
+            with st.expander("🔍 View Full Error Details"):
+                st.code(f"""
+Return Code: {e.returncode}
+Command: {e.cmd}
+                
+STDERR:
+{e.stderr or 'No stderr output'}
+
+STDOUT: 
+{e.stdout or 'No stdout output'}
+                """)
             self.restore_backup(csv_file, backup_file)
             
         except Exception as e:
