@@ -171,11 +171,36 @@ class AppointmentsDashboard:
                 Contact your administrator if you don't have access credentials.
                 """)
     
+    def is_local_environment(self) -> bool:
+        """Check if running in local environment vs Streamlit Cloud."""
+        # Streamlit Cloud sets specific environment variables
+        streamlit_cloud_indicators = [
+            'STREAMLIT_SHARING_MODE',
+            'STREAMLIT_SERVER_PORT', 
+            '_STREAMLIT_SERVER_PORT_',
+        ]
+        
+        # Check if any Streamlit Cloud indicators are present
+        for indicator in streamlit_cloud_indicators:
+            if os.getenv(indicator):
+                return False
+                
+        # Also check if we're in a typical cloud environment path
+        if '/mount/src/' in os.getcwd():
+            return False
+            
+        return True
+    
     def show_logout_option(self):
         """Show logout option in sidebar."""
         with st.sidebar:
             st.markdown("---")
             st.markdown(f"👤 **Logged in as:** {st.session_state.get('username', 'Unknown')}")
+            
+            # Show environment info
+            env_type = "🏠 Local" if self.is_local_environment() else "☁️ Cloud"
+            st.caption(f"Environment: {env_type}")
+            
             if st.button("🚪 Logout", use_container_width=True):
                 st.session_state.authenticated = False
                 st.session_state.username = None
@@ -474,6 +499,12 @@ class AppointmentsDashboard:
     
     def refresh_data(self):
         """Safely refresh data by running the scraper."""
+        # Prevent scraper execution on Streamlit Cloud
+        if not self.is_local_environment():
+            st.error("❌ Scraper cannot run on Streamlit Cloud")
+            st.info("Please upload your CSV file instead using the file uploader below.")
+            return
+        
         try:
             # Create backup of current CSV file
             csv_file = 'Appointments.csv'
@@ -521,8 +552,21 @@ class AppointmentsDashboard:
                 else:
                     raise subprocess.CalledProcessError(result.returncode, "scraper.py", result.stderr)
                     
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             st.error("⏰ Scraper timed out after 5 minutes")
+            st.warning("The scraper is taking longer than expected. This could be due to:")
+            st.markdown("""
+            - Large amount of data to process
+            - Slow network connection
+            - WordPress site performance issues
+            - Authentication problems
+            """)
+            
+            with st.expander("🔍 View Timeout Details"):
+                st.code(f"""
+Command: {e.cmd}
+Timeout: {e.timeout} seconds
+                """)
             self.restore_backup(csv_file, backup_file)
             
         except subprocess.CalledProcessError as e:
@@ -548,6 +592,17 @@ STDOUT:
             
         except Exception as e:
             st.error(f"❌ Error refreshing data: {str(e)}")
+            
+            # Show detailed error information
+            with st.expander("🔍 View Full Error Details"):
+                import traceback
+                st.code(f"""
+Error Type: {type(e).__name__}
+Error Message: {str(e)}
+
+Full Traceback:
+{traceback.format_exc()}
+                """)
             self.restore_backup(csv_file, backup_file)
     
     def restore_backup(self, csv_file: str, backup_file: str):
@@ -619,8 +674,12 @@ STDOUT:
         with col1:
             st.subheader("📈 Analytics")
         with col2:
-            if st.button("🔄 Refresh Data", type="primary", help="Run scraper to get latest data"):
-                self.refresh_data()
+            # Only show refresh button in local environment
+            if self.is_local_environment():
+                if st.button("🔄 Refresh Data", type="primary", help="Run scraper to get latest data"):
+                    self.refresh_data()
+            else:
+                st.info("💡 Running on Streamlit Cloud\nUse file upload to add data")
         
 
         # Row 1: Geographic and Service analysis
@@ -857,40 +916,81 @@ STDOUT:
         
         # Load data
         if not self.load_data():
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.markdown("""
-                ### 🚀 Getting Started
-                
-                1. **Run the scraper** to get your data:
-                   ```bash
-                   python scraper.py
-                   ```
-                
-                2. **Refresh this page** once the data is available.
-                """)
-            with col2:
-                st.markdown("### 🔄 Actions")
-                if st.button("🔄 Refresh Data", type="primary", help="Refresh the page to check for new data"):
-                    st.rerun()
-                
-                st.markdown("---")
-                st.markdown("### 📥 Upload Data")
-                uploaded_file = st.file_uploader(
-                    "Upload Appointments.csv",
-                    type="csv",
-                    key="csv_uploader",
-                    help="Upload your Appointments.csv file to view the dashboard"
-                )
-                if uploaded_file is not None:
-                    try:
-                        # Save the uploaded file
-                        with open("Appointments.csv", "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-                        st.success("✅ File uploaded successfully!")
+            if self.is_local_environment():
+                # Local environment instructions
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown("""
+                    ### 🚀 Getting Started (Local Environment)
+                    
+                    1. **Run the scraper** to get your data:
+                       ```bash
+                       python scraper.py
+                       ```
+                    
+                    2. **Refresh this page** once the data is available.
+                    """)
+                with col2:
+                    st.markdown("### 🔄 Actions")
+                    if st.button("🔄 Refresh Data", type="primary", help="Refresh the page to check for new data"):
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Error uploading file: {e}")
+                    
+                    st.markdown("---")
+                    st.markdown("### 📥 Upload Data")
+                    uploaded_file = st.file_uploader(
+                        "Upload Appointments.csv",
+                        type="csv",
+                        key="csv_uploader",
+                        help="Upload your Appointments.csv file to view the dashboard"
+                    )
+                    if uploaded_file is not None:
+                        try:
+                            # Save the uploaded file
+                            with open("Appointments.csv", "wb") as f:
+                                f.write(uploaded_file.getbuffer())
+                            st.success("✅ File uploaded successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error uploading file: {e}")
+            else:
+                # Streamlit Cloud environment
+                st.markdown("""
+                ### ☁️ Streamlit Cloud Environment
+                
+                The scraper cannot run directly on Streamlit Cloud. Please upload your data file instead.
+                """)
+                
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    uploaded_file = st.file_uploader(
+                        "📥 Upload your Appointments.csv file",
+                        type="csv",
+                        key="csv_uploader",
+                        help="Upload the CSV file generated by running the scraper locally"
+                    )
+                    if uploaded_file is not None:
+                        try:
+                            # Save the uploaded file
+                            with open("Appointments.csv", "wb") as f:
+                                f.write(uploaded_file.getbuffer())
+                            st.success("✅ File uploaded successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error uploading file: {e}")
+                
+                with col2:
+                    st.info("""
+                    **💡 How to get data:**
+                    
+                    1. Run the scraper locally:
+                       ```bash
+                       python scraper.py
+                       ```
+                    2. Upload the generated `Appointments.csv` file here
+                    """)
+                    
+                    if st.button("🔄 Check for Data", help="Refresh to check if data was uploaded"):
+                        st.rerun()
             return
         
         # Create filters
