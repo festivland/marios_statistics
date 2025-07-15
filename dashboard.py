@@ -842,16 +842,40 @@ class AppointmentsDashboard:
         
         # Load data
         if not self.load_data():
-            st.markdown("""
-            ### 🚀 Getting Started
-            
-            1. **Run the scraper** to get your data:
-               ```bash
-               python scraper.py
-               ```
-            
-            2. **Refresh this page** once the data is available.
-            """)
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.markdown("""
+                ### 🚀 Getting Started
+                
+                1. **Run the scraper** to get your data:
+                   ```bash
+                   python scraper.py
+                   ```
+                
+                2. **Refresh this page** once the data is available.
+                """)
+            with col2:
+                st.markdown("### 🔄 Actions")
+                if st.button("🔄 Refresh Data", type="primary", help="Refresh the page to check for new data"):
+                    st.rerun()
+                
+                st.markdown("---")
+                st.markdown("### 📥 Upload Data")
+                uploaded_file = st.file_uploader(
+                    "Upload Appointments.csv",
+                    type="csv",
+                    key="csv_uploader",
+                    help="Upload your Appointments.csv file to view the dashboard"
+                )
+                if uploaded_file is not None:
+                    try:
+                        # Save the uploaded file
+                        with open("Appointments.csv", "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        st.success("✅ File uploaded successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error uploading file: {e}")
             return
         
         # Create filters
